@@ -1,91 +1,56 @@
-# 🛠️ Traycer Task Planner - VS Code Extension  
+# Tracer Task Planner VSCode Extension
 
-**AI-powered structured task planning inside VS Code**  
-
-## 📖 Overview  
-Traycer Task Planner is a **VS Code extension** that provides **structured, AI-generated task plans** for software development. It automatically detects the tech stack, suggests project phases, and outlines key considerations like security, testing, and deployment.  
-
----
-
-## 🚀 Features  
-
-✔ **AI-powered task planning** - Generates structured, step-by-step plans  
-✔ **Tech stack detection** - Identifies project dependencies automatically  
-✔ **Real-world considerations** - Covers security, performance, and deployment  
-✔ **VS Code integration** - Works seamlessly within the IDE  
+## 📌 Candidate Information
+- **Name:** Praveen Kumar Patidar  
+- **Email:** praveen_k@bt.iitr.ac.in or praveenpatidar171@gmail.com  
+- **Tech Stack Used:** TypeScript, Node.js, Express.js, OpenAI Gemini API, VSCode API, Session Storage  
 
 ---
 
-## 🛠 Installation & Setup  
-
-### 1️⃣ **Clone the Repository**  
-```sh
-git clone https://github.com/praveenpatidar171/Task-Planner-extension.git
-cd Task-Planner-extension
-```
-
-### 2️⃣ **Install Dependencies**  
-```sh
-npm install
-```
-
-### 3️⃣ **Compile TypeScript Code**  
-Since this is a TypeScript-based VS Code extension, you need to compile it before running:  
-```sh
-npm run compile
-```
-
-### 4️⃣ **Run the Extension in VS Code**  
-- Open VS Code  
-- Press `F5` to start a **new Extension Development Host**  
-- The extension will be available for testing in the new VS Code window  
+## 📌 How to Use
+1. **Extract the folder** from the provided ZIP file.
+2. **Open the folder** in VS Code.
+3. **Install dependencies** by running:
+   ```sh
+   npm install
+   ```
+4. **Start development mode** by pressing:
+   - `F5` (to open the VS Code development host).
+5. **Run the extension** by pressing:
+   - `Ctrl + Shift + P` to open the command palette.
+   - Search for **Traycer: Generate Task Plan** and click on it.
+6. **Start using the extension** to generate structured task plans!
 
 ---
 
-## 🎯 **Usage**  
-
-### **Triggering Task Planning**  
-1. Open a project in VS Code  
-2. Press **`Ctrl + Shift + P`** to open the **Command Palette**  
-3. Type `Traycer: Generate Task Plan` and select it  
-4. Enter a **high-level task description** (e.g., `Create a expense tracker application`)  
-5. The extension will generate a detailed **step-by-step development plan**  
-
-
-This will execute tests using **VS Code's testing framework**.  
+## 📌 UI Overview
+- **Input Box:** Users can type their task description.
+- **Generate Plan Button:** Click this button to receive a structured response.
+- **Output Section:** Displays the generated task plan based on user input.
 
 ---
 
-## 📦 **Project Structure**  
+## 📌 Approach
+### **1️⃣ Tech Scanner**
+- The scanner can read the codebase of the user and can detect the current tech stack automatically and provide the response based on detected tech.
+- To ensure efficiency, we only read up to **15 lines** in files because most of the imports and exports can be found in these lines to avoid unnecessary response delays.
 
-```
-traycer-task-planner/
-├── src/
-│   ├── extension.ts   # Main extension entry point
-│   ├── methods        # Helper functions
-├── out/               # Compiled TypeScript output
-├── package.json       # Project dependencies & VS Code metadata
-├── tsconfig.json      # TypeScript configuration
-└── README.md          # Project documentation
-```
+### **2️⃣ Dynamic Response Generation**
+- We use **Gemini API** to generate detailed task plans.
+- The response is structured dynamically, and we can modify the prompt in the future to refine results.
 
----
-
-## 🚀 **Future Enhancements**  
-
-- **Customization Options**: Allow users to fine-tune task planning results  
-- **More AI Integrations**: Support different LLMs for task generation  
-- **User Preferences**: Save user-selected tech stacks for future queries  
+### **3️⃣ Session Handling For More Intelligence**
+- The system scans the codebase of the user for **only on the first task** or after VS Code is reloaded because for the next tasks we already have stored previous tasks in session, so AI uses these tasks as context for next responses to improve accuracy.
+- Previous tasks are stored, allowing AI to maintain context and save time for subsequent requests.
+- Only a single session is stored for now, which can be reset on vs. code reload.
 
 ---
 
-## 🙌 **Acknowledgments**  
-
-- Thanks to **Traycer AI** for the challenge prompt  
-- Inspired by **GitHub Copilot Workspaces**  
-- Built using **VS Code APIs, OpenAI, and TypeScript**  
+## 📌 Future Enhancements
+- **Multi-session storage:** Currently, only a single session is maintained. We plan to allow session history storage.
+- **More control over task structuring:** Users could configure templates for different types of task plans.
+- **Improved UI/UX:** Adding features like task categorization, editing, and exporting task plans.
+- **Alternative AI models:** Exploring OpenAI, Claude, or other LLMs for additional response variations.
 
 ---
-
-### 🚀 **Now you’re ready to use the AI-powered Task Planner in VS Code!**  
-
+**Thank you for reviewing my submission! Feel free to reach out if you have any questions or need modifications.** 

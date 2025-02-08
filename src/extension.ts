@@ -1,163 +1,237 @@
 import * as vscode from 'vscode';
 import * as dotenv from "dotenv";
 import { scanProject } from './methods/scanProject';
-dotenv.config({ path: __dirname + "/../.env" });
+import { SessionStore } from './methods/sessionStore';
 
+dotenv.config({ path: __dirname + "/../.env" });
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 export function activate(context: vscode.ExtensionContext) {
+  const disposable = vscode.commands.registerCommand('traycer.taskPlanner', () => {
+    const panel = vscode.window.createWebviewPanel(
+      "taskPlanner",
+      "Traycer Task Planner",
+      vscode.ViewColumn.One,
+      { enableScripts: true }
+    );
+    panel.webview.html = getWebviewContent();
 
-	const disposable = vscode.commands.registerCommand('traycer.taskPlanner', () => {
+    panel.webview.onDidReceiveMessage(
+      async message => {
+        if (message.command === "submitTask") {
+          const taskPlan = await generateTaskPlan(message.task);
+          panel.webview.postMessage({ command: "showPlan", plan: taskPlan });
+        }
+      },
+      undefined,
+      context.subscriptions
+    );
+  });
 
-		// Display a message box to the user
-		const panel = vscode.window.createWebviewPanel(
-			"taskPlanner",
-			"Traycer Task Planner",
-			vscode.ViewColumn.One,
-			{ enableScripts: true }  // it will allow javascript execution
-		);
-		panel.webview.html = getWebviewContent();
-
-
-		// Listen for messages from the Webview
-		panel.webview.onDidReceiveMessage(
-			async message => {
-				if (message.command === "submitTask") {
-					const taskPlan = await generateTaskPlan(message.task);
-					panel.webview.postMessage({ command: "showPlan", plan: taskPlan });
-				}
-			},
-			undefined,
-			context.subscriptions
-		);
-	});
-
-	context.subscriptions.push(disposable);
+  context.subscriptions.push(disposable);
 }
 
-// Function to generate the task plan by using GEMINI
-
+// Function to generate the task plan using Gemini
 async function generateTaskPlan(task: string): Promise<string> {
-	try {
-		// Ensure API key is available
-		if (!GEMINI_API_KEY) {
-			throw new Error("Missing Gemini API Key. Please check your .env file.");
-		}
+  try {
+    if (!GEMINI_API_KEY) {
+      throw new Error("Missing Gemini API Key. Please check your .env file.");
+    }
 
-		// Scan the project to detect tech stack
-		const techStack = scanProject();
+    const session = SessionStore.getInstance();
+    let techStack = session.getTechStack();
+    const lastTask = session.getLastTask();
+    const previousTask = lastTask ? lastTask.input : "NO previous task it is the first task";
+    console.log("previous task is ", previousTask);
 
-		// Construct detected stack info
-		const techInfo = `
-		Detected Tech Stack:
-		- **Frameworks:** ${techStack.frameworks.length > 0 ? techStack.frameworks.join(", ") : "Unknown"}
-		- **Databases:** ${techStack.databases.length > 0 ? techStack.databases.join(", ") : "None"}
-		- **Other Tools:** ${techStack.otherTools.length > 0 ? techStack.otherTools.join(", ") : "None"}
-		`;
-		console.log(techInfo);
+    if (!techStack) {
+      console.log("First-time scan: Detecting project tech stack...");
+      techStack = await scanProject();
+      session.setTechStack(techStack);
+    } else {
+      console.log("Using cached tech stack.");
+    }
 
-		const prompt = `
-						You are an AI assistant that generates **structured, step-by-step task plans** for software development.
+    // Store user input task in session
+    session.addTask(task, "");
 
-						The user provided the task: "${task}". 
+    const techInfo = `
+        **Detected Tech Stack:**
+        - **Frameworks:** ${techStack.frameworks.length ? techStack.frameworks.join(", ") : "Unknown"}
+        - **Databases:** ${techStack.databases.length ? techStack.databases.join(", ") : "None"}
+        - **Other Tools:** ${techStack.otherTools.length ? techStack.otherTools.join(", ") : "None"}
+        `;
+    console.log(techInfo);
 
-						- **Detected Tech Stack (from project dependencies):**  
-						${techInfo}
+    const prompt = `
+You are an **AI-powered software architect** generating **structured, step-by-step task plans** optimized for software development.
+---
 
-						- **IMPORTANT:** The detected tech stack is based on available dependencies but may not capture the full setup.  
-						If the project has a frontend (React, Next.js, Vue, etc.) or a backend (Express, Django, FastAPI, etc.), the user should confirm or specify their preference.
-                        If any tech stack detected then mention it to user that i found this for frontend and this for backend and this for database
-						. and then ask if he is okay with these techs or want to change and then proceed and if you found any tech stack always prefer that but first ask user that i will proceed with this tech unless user specify other tech.
-						
-						- **Frontend Consideration:**  
-						If No frontend framework was detected. then ask politely Would you like to specify one? and gives options (Options: React.js, Vue.js, Angular, Svelte, etc.)  
-					   and say If not specified, I will proceed with **React.js (functional components)**.
-
-						- **Backend Consideration:**  
-						If No backend framework was detected. then ask politely Would you like to specify one? and gives options (Options: Node.js with Express.js, Django, FastAPI, Go Fiber, etc.)  
-						and say If not specified, I will proceed with **Node.js + Express.js + PostgreSQL**.
-
-						- **Your Job:**  
-						1. Generate a **structured, step-by-step task plan** based on the given task.  
-						2. Each step should include:  
-							- A **detailed explanation** of why the step is necessary.  
-							- **Code snippets** where applicable (backend, database, frontend, API calls).  
-							- **Alternatives** (e.g., different frameworks, database choices).  
-						3. Provide **real-world considerations**, such as:  
-							- Security best practices (input validation, authentication, error handling).  
-							- Performance optimizations (caching, efficient database queries).  
-							- Scalability concerns (API rate limiting, database indexing, load balancing).  
-						4. **Frontend Enhancements (if applicable):**  
-							- Include **UI component code based on the project type** (e.g., form components for CRUD apps, dashboard components for analytics apps).  
-							- Show **how the frontend interacts with the backend** (API calls, state management).  
-							- Explain **state management strategies** (e.g., React Context API, Redux, Zustand, Vuex).  
-						5. **Testing Strategy:**  
-							- Provide **testing recommendations for both backend and frontend**.  
-							- Suggest tools like Jest, Supertest (backend) & React Testing Library, Cypress (frontend).  
-							- Include **example test cases for API routes and UI components**.  
-						6. **Deployment Steps:**  
-							- Provide **step-by-step instructions** for deploying the backend (Heroku, AWS, Docker, etc.).  
-							- Provide **step-by-step instructions** for deploying the frontend (Netlify, Vercel, etc.).  
-							- Include **actual commands** to deploy the application.  
-
-						 7. **Final Project Structure (if relevant to the task)**  
-							- If appropriate for the task, **include a final file structure for the project**.  
-							- The file structure should reflect best practices for organizing backend and frontend files.  
-							- Only include this if it **adds value** to the task (e.g., a full-stack project or backend-heavy project).  
-
-						If frontend or backend involvement is unclear, **politely ask the user to specify** before proceeding. 
-
-						If the user does not specify a frontend or backend, **proceed with React.js (functional components) for frontend and Node.js + Express.js + PostgreSQL for backend**.
-						 
-					`;
+**📌 Previous Task in This Session:**  
+${previousTask}  
+**This helps maintain continuity if the current request is an extension of a prior task. if it is mention in user friendly way that 
+it is the next part or continuation of last task and then proceed accordingly, if not then provide a fresh plan and proceed normally.
+If previous task is unknown then don't mention it just proceed like a fresh task without mentioning.
 
 
-		// Define the API endpoint
-		const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+### **📌 Task Analysis & Tech Stack Verification**
+- **Task:** "${task}"
+- **Detected Tech Stack:**  
+${techInfo}
 
-		// Define the request body
-		const requestBody = {
-			contents: [
-				{
-					parts: [
-						{
-							text: prompt
-						}
-					]
-				}
-			]
-		};
+#### **Before Proceeding**:
+1. **If the task is self-explanatory (e.g., "Build REST APIs")**, **immediately proceed**.
+2. **If the task is ambiguous or highly specific (e.g., "Build REST APIs for a banking system")**, ask:
+   - **"Is this a finance-related project? Do you require additional security measures like OAuth or PCI-DSS compliance?"**
+   - **"Should the APIs support real-time communication (e.g., WebSockets, MQTT)?"**
+   - **"Do you require a microservices architecture or a monolithic approach?"**
+3. **If the tech stack is incomplete**, ask whether to use:
+   - **Frontend:** React.js, Vue.js, Angular, etc.
+   - **Backend:** Node.js (Express.js), Django, FastAPI, etc.
+   - **Database:** MongoDB, PostgreSQL, MySQL, etc.
+4. **If the tech stack is found then politely inform user that detected tech stack is this and plan will be based on detected tech and then ask 
+     that if you want other tech please mention specific tech in task, and then proceed with detect tech and give a structured plan.
+5. **Before proceeding analyze task silently if it needs total implementation like backend, frontend and all, if it is relavant then give
+   a plan include all of these but if its just related to either frontend or backend then only give plan relavent to related tech ex:
+   task is improve the ui of ... then its only related to frontend so in this case no need to give backend, only suggest the plan like how
+   UI can be improved what user can use and always in the end ask as user friendly that if you need any step in detail, please ask for the step
+   in detail.
+6. **It might be possible that the task might be related to the previous asked task so if the new task seems relevant and connected then
+provide the plan based on last response you can use our tasks stored in  sessionstore, only do this if its relevant and needed if not proceed normaly.
 
-		// Send request to Gemini API
-		const response = await fetch(API_URL, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify(requestBody),
-		});
+---
 
-		const result = await response.json();
+### **Dynamic Task Plan Generation**
+- **Analyze the task category (Finance, Social Media, IoT, E-commerce, etc.)** and generate **relevant implementation details**.
+- **Only generate relevant steps**—skip frontend if the task is backend-specific, and vice versa.
+- **Ensure all responses use Markdown formatting** for **VS Code Webview compatibility**.
 
-		// Check for API errors
-		if (!response.ok) {
-			console.error("Gemini API Error:", result);
-			throw new Error(`Gemini API Error: ${(result as any).error.message || "Unknown error"}`);
-		}
+---
 
-		// Extract and format the response
-		const aiPlan = (result as any).candidates?.[0]?.content?.parts?.[0]?.text || "No response from AI";
-		return `<h3>Task Plan for: ${task}</h3><p>${aiPlan.replace(/\n/g, "<br>")}</p>`;
+### **📌 Phase 1: Project Setup**
+#### 🔹 Step 1: Install Required Dependencies
 
-	} catch (error) {
-		console.error("Error calling Gemini API:", error);
-		return `<p style="color:red;">Error: Unable to generate task plan.</p>`;
-	}
+- **Backend:**  
+\`\`\`sh
+npm install express mongoose dotenv cors body-parser jsonwebtoken
+\`\`\`
+
+- **Frontend:**  
+\`\`\`sh
+npm install react react-dom react-router-dom axios tailwindcss
+\`\`\`
+
+---
+
+### **📌 Phase 2: Backend Implementation**
+#### 🔹 Step 2: Set Up REST API Routes  
+- Follow **RESTful conventions** (GET /users, POST /users, etc.).
+- Implement **authentication & authorization** if needed.
+
+\`\`\`typescript
+app.post('/api/login', (req, res) => {
+  const token = jwt.sign({ userId: "12345" }, process.env.JWT_SECRET!);
+  res.send({ token });
+});
+\`\`\`
+
+---
+
+### **📌 Phase 3: Frontend Implementation**
+#### 🔹 Step 3: Consume API in React Frontend  
+- Use axios to fetch data from API.
+
+\`\`\`tsx
+import axios from 'axios';
+const response = await axios.get('/api/users');
+\`\`\`
+
+---
+
+### **📌 Phase 4: Security & Performance**
+#### 🔹 Step 4: Implement Security Best Practices
+- **Sanitize user inputs** to prevent injection attacks.
+- **Use HTTPS & secure authentication** (JWT, OAuth, etc.).
+
+---
+
+### **📌 Phase 5: Testing & Deployment**
+#### 🔹 Step 5: Testing Strategy
+- **Backend:** Jest + Supertest for API testing.
+- **Frontend:** React Testing Library.
+
+\`\`\`typescript
+test('GET /api/users', async () => {
+  const response = await request(app).get('/api/users');
+  expect(response.status).toBe(200);
+});
+\`\`\`
+
+#### 🔹 Step 6: Deployment Recommendations
+1. **Docker-based Deployment (Default)**
+\`\`\`dockerfile
+FROM node:18
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 3001
+CMD ["node", "server.js"]
+\`\`\`
+2. **Serverless Deployment (If Cloud Detected)**
+- **AWS Lambda**: Generate an serverless.yml config.
+- **Google Cloud Functions**: Use gcloud deploy.
+
+---
+
+### **📌 Final Notes**
+ Ensure **all responses follow structured task execution**.  
+ **Provide additional context based on the task category** (e.g., Finance, IoT).  
+ If frontend or backend involvement is unclear, **ask the user for clarification**.  
+ Use **Markdown formatting** for **VS Code Webview compatibility**.
+
+---
+Now, generate the structured task plan!
+`;
+
+
+
+
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+    const requestBody = {
+      contents: [{ parts: [{ text: prompt }] }]
+    };
+
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error("Gemini API Error:", result);
+      throw new Error(`Gemini API Error: ${(result as any).error?.message || "Unknown error"}`);
+    }
+
+    const aiPlan = (result as any).candidates?.[0]?.content?.parts?.[0]?.text || "No response from AI";
+
+    // Store AI response for future reference
+    session.addTask(task, aiPlan);
+
+    return `<h3>Task Plan for: ${task}</h3><p>${aiPlan.replace(/\n/g, "<br>")}</p>`;
+
+  } catch (error) {
+    console.error("Error calling Gemini API:", error);
+    return `<p style="color:red;">Error: Unable to generate task plan.</p>`;
+  }
 }
 
 function getWebviewContent(): string {
-	return `
+  return `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -200,7 +274,6 @@ function getWebviewContent(): string {
         </html>
     `;
 }
-
 
 // This method is called when your extension is deactivated
 export function deactivate() { }
